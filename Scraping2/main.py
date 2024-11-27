@@ -85,19 +85,30 @@ while True:
             sleep(3)
 
             # Extração dos dados de cada startup
+            logo = logo = navegador.find_element(By.XPATH, "//img[@class='image border-radius']").get_attribute("src")
+            stage = "Stage"  # Substitua com o código correto
+            totalraised = navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[2]/div[1]/div[1]/div[3]/div[2]/div/div").text
             company = navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[1]/div[2]/div[2]/div[1]/div[1]").text
-            market = navegador.find_element(By.XPATH, "//span[contains(@class, 'market-class')]").text
-            employees = navegador.find_element(By.XPATH, "//span[contains(@class, 'employees-class')]").text
-            funding = navegador.find_element(By.XPATH, "//span[contains(@class, 'funding-class')]").text
-            # Adicione mais campos conforme necessário
+            vc = "VC Name"  # Substitua com o código correto
+            sector = "Sector"  # Substitua com o código correto
+            description = "Description"  # Substitua com o código correto
+            subsector = "Sub-sector"  # Substitua com o código correto
+            country = "Country"  # Substitua com o código correto
+            notes = "Notes"  # Substitua com o código correto
+            
 
             # Armazenar os dados na lista
             startups_data.append({
-                "Logo":
+                "Logo": logo,
+                "Stage": stage,
+                "Total Raised": totalraised,
                 "Company": company,
-                "Market": market,
-                "Employees": employees,
-                "Funding": funding
+                "VC": vc,
+                "Sector": sector,
+                "Description": description,
+                "Sub-sector": subsector,
+                "Country": country,
+                "Notes": notes
             })
             print(f"Startup {company} processada.")
 
