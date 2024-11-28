@@ -5,10 +5,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException, ElementClickInterceptedException
 from selenium.webdriver.common.action_chains import ActionChains
-from time import sleep, time
+from time import sleep
 import pandas as pd
 import csv
-
 
 # Configuração inicial
 options = Options()
@@ -58,10 +57,15 @@ print("Botão 'Filter' clicado")
 sleep(5)
 
 # Selecionando o mercado (Market)
-market_button = WebDriverWait(navegador, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[@id='app']/div[3]/div/div/div/div[1]/div[2]/div/div[1]/div[2]/div/div/div[7]/span")))
-market_button.click()
-print("Filtro 'Market' selecionado")
-sleep(7)
+try:
+    market_button = WebDriverWait(navegador, 20).until(
+        EC.element_to_be_clickable((By.XPATH, "//*[@id='app']/div[3]/div/div/div/div[1]/div[2]/div/div[1]/div[2]/div/div/div[7]/span"))
+    )
+    market_button.click()
+    print("Botão 'Market' clicado com sucesso!")
+except TimeoutException:
+    print("Não foi possível encontrar o botão 'Market'. A página pode não ter carregado corretamente.")
+sleep(5)
 
 # Selecionando o filtro 'Foodtech'
 navegador.execute_script("window.scrollBy(0, 500);")
@@ -77,83 +81,101 @@ sleep(5)
 apply_filters_button = navegador.find_element(By.XPATH, "//*[@id='app']/div[3]/div/div/div/div[3]/button[1]")
 apply_filters_button.click()
 print("Filtros aplicados")
-sleep(5)
+sleep(7)
 
-# Função para carregar todas as startups na página
-def carregar_todas_startups(navegador, total_esperado):
-    total_startups = len(navegador.find_elements(By.XPATH, "//div[@class='startup border-bottom d-flex relative']"))
-    print(f"Startups inicialmente carregadas: {total_startups}")
-    
-    while total_startups < total_esperado:
-        navegador.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        sleep(2)
-        novos_startups = len(navegador.find_elements(By.XPATH, "//div[@class='startup border-bottom d-flex relative']"))
-        if novos_startups == total_startups:
-            print("Nenhum novo bloco foi carregado. Scrolling finalizado.")
-            break
-        total_startups = novos_startups
-        print(f"Startups carregadas até agora: {total_startups}")
-    print(f"Carregamento completo! Total de startups carregadas: {total_startups}")
+# Função para extrair os dados de cada startup
+def extract_startup_details(startup):
+    try:
+        # Clique na startup para acessar os detalhes
+        startup.click()
+        sleep(7)
 
-# Função para processar os dados de cada startup
-def processar_startups(navegador):
+        # Extrair os dados
+        startup_data = {
+            "Logo": navegador.find_element(By.XPATH, "//img[@class='image border-radius']").get_attribute("src"),
+            "Stage": navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[2]/div/div[7]/div[2]/div[1]/div[2]").text,
+            "Company": navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[1]/div[2]/div[2]/div[1]/div[1]").text,
+            "Total Raised": navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[2]/div[1]/div[1]/div[3]/div[2]/div/div").text,
+            "VC": navegador.find_element(By.XPATH, "//*[@id='19836']/div/div/div[3]/span/span/a").get_attribute("href"),
+            "Sector": navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[1]/div[2]/div[2]/div[2]").text,
+            "Description": navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[1]/div[2]").text,
+            "Sub-sector": navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[1]/div[3]/div[2]/div[2]/div[1]").text,
+            "Country": navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[2]/div/div[6]/div[2]/div").text,
+            "Website": navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[2]/div/div[14]/div[2]/a").get_attribute("href"),
+        }
+        print(f"Startup '{startup_data['Company']}' extraída com sucesso!")
+        return startup_data
+    except Exception as e:
+        print(f"Erro ao processar startup: {e}")
+        return None
+    finally:
+        # Volte para a lista principal
+        navegador.back()
+        sleep(7)
+
+# Função para rolar e extrair todas as startups
+def scroll_and_extract_details(driver, output_file):
     startups_data = []
-    startup_rows = navegador.find_elements(By.XPATH, "//div[@class='startup border-bottom d-flex relative']")
-    total_startups = len(startup_rows)
-    print(f"Total de startups na página: {total_startups}")
-    
-    for index in range(total_startups):
+    startups_seen = set()  # Evitar duplicados
+
+    # Obtém as startups visíveis na página
+    startups = driver.find_elements(By.CSS_SELECTOR, "#app > div.v-application--wrap > main > div > div > div.transition.d-flex.flex-column.shrank-content > div > div.px-3.mb-12 > div:nth-child(2) > div:nth-child(1) > div.disable-text-selection.relative > div.relative > div:nth-child(3) > div.startup.border-bottom.d-flex.relative")  # Seletor genérico para cada startup
+
+    for startup in startups:
         try:
-            startup_rows = navegador.find_elements(By.XPATH, "//div[@class='startup border-bottom d-flex relative']")
-            startup = startup_rows[index]
-            navegador.execute_script("arguments[0].scrollIntoView(true);", startup)
-            sleep(1)
-            startup.click()
-            sleep(6)
+            # Identificar nome ou título único da startup para evitar clicar novamente
+            startup_name_element = WebDriverWait(startup, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.disable-text-selection:nth-child(1) > div:nth-child(3) > div:nth-child(1) > div:nth-child(1) > a:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(1)")))
+            startup_name = startup_name_element.text
 
-            # Extraindo os dados
-            logo = navegador.find_element(By.XPATH, "//img[@class='image border-radius']").get_attribute("src")
-            stage = navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[2]/div/div[7]/div[2]/div[1]/div[2]").text
-            company = navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[1]/div[2]/div[2]/div[1]/div[1]").text
-            totalraised = navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[2]/div[1]/div[1]/div[3]/div[2]/div/div").text
-            vc = navegador.find_element(By.XPATH, "//*[@id='19836']/div/div/div[3]/span/span/a").get_attribute("href")
-            sector = navegador.find_element(By.XPATH, "//*[@id='profile-page']/div/div[1]/div[2]/div[2]/div[2]").text
-            description = navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[1]/div[2]").text
-            subsector = navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[1]/div[3]/div[2]/div[2]/div[1]").text
-            country = navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[2]/div/div[6]/div[2]/div").text
-            website = navegador.find_element(By.XPATH, "//*[@id='SUMMARY']/div[3]/div[2]/div/div[14]/div[2]/a").get_attribute("href")
-            
-            startup_data = {
-                "Logo": logo,
-                "Stage": stage,
-                "Company": company,
-                "Total Raised": totalraised,
-                "VC": vc,
-                "Sector": sector,
-                "Description": description,
-                "Sub-sector": subsector,
-                "Country": country,
-                "Website": website
-            }
-            startups_data.append(startup_data)
-            print(f"Startup '{company}' processada com sucesso!")
+            # Verifica se o nome da startup já foi visto
+            if startup_name not in startups_seen:
+                startups_seen.add(startup_name)  # Marca o nome como visto
 
-            navegador.back()
-            sleep(3)
+                # Clicar na startup
+                startup.click()
+                sleep(7)  # Aguardar a página carregar, considere substituir por WebDriverWait
 
-        except Exception as e:
-            print(f"Erro ao processar startup {index + 1}: {e}")
-            navegador.back()
-            sleep(3)
-            continue
+                # Extrair os dados da startup
+                startup_data = extract_startup_details(startup)
 
-    df = pd.DataFrame(startups_data)
-    df.to_csv("startups_data.csv", index=False)
-    print("Dados salvos em startups_data.csv")
+                # Verifica se os dados foram extraídos com sucesso
+                if startup_data:
+                    startups_data.append(startup_data)
 
-# Executar as funções
-carregar_todas_startups(navegador, 1334)
-processar_startups(navegador)
+                # Voltar para a lista de startups para continuar o loop
+                navegador.back()
+                sleep(5)
 
-# Finalizar o navegador
-navegador.quit()
+        except (NoSuchElementException, StaleElementReferenceException, ElementClickInterceptedException) as e:
+            print(f"Erro ao clicar ou processar a startup: {e}")
+            continue  # Continue para a próxima startup caso ocorra um erro
+
+    # Escrever os dados extraídos em um arquivo CSV
+    with open(output_file, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=startups_data[0].keys())
+        writer.writeheader()
+        writer.writerows(startups_data)
+
+    print(f"Dados extraídos e salvos em {output_file}")
+
+# Função principal para iniciar o processo
+def main():
+    output_file = "startups_data.csv"
+    
+    # Aguardar que a página carregue e garantir que todas as startups estão visíveis
+    WebDriverWait(navegador, 30).until(
+        EC.presence_of_all_elements_located(
+            (By.CSS_SELECTOR, "#app > div.v-application--wrap > main > div > div > div.transition.d-flex.flex-column.shrank-content > div > div.px-3.mb-12 > div:nth-child(2) > div:nth-child(1) > div.disable-text-selection.relative > div.relative > div:nth-child(4)")  # Ajustado para o seletor correto de cada startup
+        )
+    )
+    print("Startups carregadas na página.")
+    
+    # Chamar a função para rolar e extrair os detalhes das startups
+    scroll_and_extract_details(navegador, output_file)
+    print("Processo concluído!")
+
+# Chamar a função principal
+if __name__ == "__main__":
+    main()
+    navegador.quit()
