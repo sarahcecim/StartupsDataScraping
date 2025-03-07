@@ -28,13 +28,13 @@ print("Clique no login realizado")
 
 # Inserindo o email para login
 inputUser = navegador.find_element(By.XPATH, "//label[text()='EMAIL']//following-sibling::input")
-inputUser.send_keys("henrycouto@google.com")
+inputUser.send_keys("user@google.com")
 print("Email inserido")
 sleep(3)
 
 # Inserindo a senha para login
 inputPass = navegador.find_element(By.XPATH, "//label[text()='PASSWORD']//following-sibling::input")
-inputPass.send_keys("semdoritos")
+inputPass.send_keys("userpassword")
 print("Senha inserida")
 sleep(3)
 
